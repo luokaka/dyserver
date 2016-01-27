@@ -1,5 +1,5 @@
 <?php
-namespace Swoole\Async;
+
 
 /**
  * Class Redis

@@ -1,7 +1,4 @@
 <?php
-
-namespace Swoole\Async;
-
 /**
  * Class MySQL
  * @package Swoole\Async
@@ -67,8 +64,8 @@ class MySQL
             $config['port'] = 3306;
         }
 
-        $this->config = $config;
-        $this->pool_size = $pool_size;
+        $this->config 		= $config;
+        $this->pool_size 	= $pool_size;
     }
 
     /**

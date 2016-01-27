@@ -1,24 +1,24 @@
 <?php
 define('DY_SYS_VERSION' , '1.0');
 include_once("DyHttpServer.php"); 
+include_once("RedisClient.php"); 
 
 class DyServer{
 	static 		$DyHttpServer 						= '';
     static 		$BaseProcessName 					= 'dy_server_';
-	private static $pidFile							='/var/dy_server_pid';
-    /**
-     * @var \swoole_http_response
-     */
+	private static $pidFile							= '/var/dy_server_pid';
     public 		$response 							= null;
 	private 	$confFile							= './conf/httpConf.php';
 	static 		$confFileReviseTime 				= 0;
 	public 		$httpConf 							= [];
 	public 		$swoole_http_config					= [];
+	public 		$redis								= null;
     function __construct ()
     {
         if(isset($argv[1])){
             self::$pidFile = $argv[1];
         }
+		
     }
 	
 	function access_log()
@@ -203,6 +203,25 @@ class DyServer{
     {
         return self::getArrVal( 'server_port' , $request->server,80);
     }
+	
+	/**
+     * 保存到redis
+     *
+     * 
+     *
+     * 
+     */
+	function saveToRedis($data){
+		$res = json_decode($data,true);
+		if(isset($res['uid'])&&!empty($res['uid'])){
+			   $this->redis->hmset('hash2:'.$res['uid'],array(time()=>json_encode($res)), function($result, $success) {
+			   $this->access_log('save-result='.$result);
+			});
+		}else{
+			$this->access_log('error='.$data);
+		}
+		
+	}
 	/**
      * 请求处理
      * @param \swoole_http_request  $request
@@ -220,19 +239,18 @@ class DyServer{
            $hostPort 	= 	$domain.':'.$this->getServerPort($request);
 		   if(function_exists('wd_decrypt')){
 			   $postdata = $request->post;
-			   //$data = wd_decrypt($postdata[0]);
-			   #$this->access_log($request->post);
 			   if(!empty($postdata)){
 				   foreach($postdata as $key=>$val){
-					  $this->access_log('post='.$key);
+					 $data = wd_decrypt(wd_hextostr($key));
 					 
-					 $this->access_log(print_r(wd_decrypt(wd_hextostr($key)),true));
-
+					 $this->access_log(print_r($data,true));
+					 
+					 $this->saveToRedis($data);
+					  
 				   }
 			   }else{
 				     $this->access_log(print_r($postdata,true));
 			   }
-			 
 		   }else{
 			   $this->access_log('function wd_decrypt no exist');
 		   }
@@ -253,8 +271,7 @@ class DyServer{
 		cli_set_process_title(self::$BaseProcessName.'Master');
 		register_shutdown_function(array($this, 'handleFatal'));
 		if($this->LoadHttpConf(true)){
-			#$listen_ip			= '192.168.64.136';			
-			#$port			    = 9501;
+			$this->redis = new RedisClient(self::getArrVal('redis_ip', $this->httpConf,'127.0.0.1'),self::getArrVal('redis_port', $this->httpConf,6379));
 			$listen_ip 			= self::getArrVal('listen_ip', $this->httpConf);
 			$port 				= self::getArrVal('port', $this->httpConf);
 			self::$DyHttpServer = new DyHttpServer($listen_ip, $port);
