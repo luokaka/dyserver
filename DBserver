@@ -1,0 +1,50 @@
+#!/bin/sh
+pidFile="/var/dydb_server_pid";
+function start(){
+	php DYDBserver.php $pidFile
+	if [ $? == 0 ]; then
+		printf "\t dbserver start OK\n"
+		return 0
+	else
+		printf "\t dbserver start FAIL\n"
+		return 1
+	fi
+}
+
+function stop(){
+	if [ -f "$pidFile" ]; then
+		pid=`cat $pidFile`
+		if [ -n "$pid" ];then
+			kill -15 $pid
+			if [ $? == 0 ];then
+				printf "\t dbserver stop OK \n"
+				return 0
+			fi
+		fi
+		printf "\t dbserver stop FAIL \n"
+		return 2
+	fi
+	printf "\t dbserver is not run\n"
+	return 3
+}
+
+
+case $1 in 
+	
+	start )
+		start
+	;;
+	stop)
+		stop
+	;;
+	restart)
+		stop
+		sleep 1
+		start
+	;;
+
+	*)
+		start
+	;;
+esac
+

@@ -1,4 +1,10 @@
 <?php
+/**
+***
+*** 接收client端发送的数据
+***
+***
+**/
 define('DY_SYS_VERSION' , '1.0');
 include_once("DyHttpServer.php"); 
 include_once("RedisClient.php"); 
@@ -211,12 +217,15 @@ class DyServer{
      *
      * 
      */
-	function saveToRedis($data){
+	function saveToRedis($data,$client_ip){
 		$res = json_decode($data,true);
 		if(isset($res['uid'])&&!empty($res['uid'])){
-			   $this->redis->hmset('hash2:'.$res['uid'],array(time()=>json_encode($res)), function($result, $success) {
-			   $this->access_log('save-result='.$result);
-			});
+				$res['ip']	= $client_ip;
+				$this->redis->lpush('datalist',array(json_encode($res)), function($result, $success) {
+					if($result!='OK'){
+						$this->access_log('save error:'.$result);
+					}
+				});
 		}else{
 			$this->access_log('error='.$data);
 		}
@@ -237,15 +246,16 @@ class DyServer{
 		   
            $domain		=	$this->getHost($request);
            $hostPort 	= 	$domain.':'.$this->getServerPort($request);
+		   $this->access_log(print_r($request->server,true));
+		  $client_ip = $request->server['remote_addr'];
 		   if(function_exists('wd_decrypt')){
 			   $postdata = $request->post;
 			   if(!empty($postdata)){
 				   foreach($postdata as $key=>$val){
-					 $data = wd_decrypt(wd_hextostr($key));
-					 
+					 $data = wd_decrypt(wd_hextostr($key));	 
 					 $this->access_log(print_r($data,true));
 					 
-					 $this->saveToRedis($data);
+					 $this->saveToRedis($data,$client_ip);
 					  
 				   }
 			   }else{

@@ -64,7 +64,27 @@ class RedisClient
         $cmd = $this->parseRequest($value);
         $connection->command($cmd, $callback);
     }
+	
+    function lpush($key,array $value,$callback){
+		$connection = $this->getConnection();
+        $connection->fields = $value;
 
+        array_unshift($value, "lpush", $key);
+        $cmd = $this->parseRequest($value);
+        $connection->command($cmd, $callback);
+		
+	}
+	
+	function rpop($key,array $value,$callback){
+		$connection = $this->getConnection();
+        $connection->fields = $value;
+
+        array_unshift($value, "rpop", $key);
+        $cmd = $this->parseRequest($value);
+        $connection->command($cmd, $callback);
+		
+	}
+	
     function parseRequest($array)
     {
         $cmd = '*' . count($array) . "\r\n";
@@ -117,6 +137,7 @@ class RedisClient
     {
         $this->pool[$id] = $connection;
     }
+	
 }
 
 class RedisConnection
