@@ -211,25 +211,43 @@ class DyServer{
     }
 	
 	/**
-     * 保存到redis
-     *
+     * 保存到redis队列
      * 
      *
      * 
      */
+	public $userList = [];
 	function saveToRedis($data,$client_ip){
 		$res = json_decode($data,true);
 		if(isset($res['uid'])&&!empty($res['uid'])){
-				$res['ip']	= $client_ip;
-				$this->redis->lpush('datalist',array(json_encode($res)), function($result, $success) {
-					if($result!='OK'){
-						$this->access_log('save error:'.$result);
-					}
-				});
+				#验证用户是否存在
+				if(!isset($this->userList[$res['uid']])){
+					$this->redis->hmget('userlist:'.$res['uid'],array('id','uid'),function($result, $success){
+						if($result['uid']){
+							$this->userList[$result['uid']] = $result;
+						}
+						
+					});
+				}
+				
+				if(isset($this->userList[$res['uid']]) && $this->userList[$res['uid']]['uid']){
+					$res['ip']		= $client_ip;
+					$res['time']	= time();
+					$res['id']		= $this->userList[$res['uid']]['id'];
+					$this->access_log('id:'.$res['id']);
+					$this->redis->lpush('datalist',array(json_encode($res)), function($result, $success) {
+						
+					$this->access_log('save success:'.$success);
+						
+					});
+				}else{
+					$this->access_log('uid no found');
+				}
+				
+				
 		}else{
 			$this->access_log('error='.$data);
 		}
-		
 	}
 	/**
      * 请求处理
@@ -246,20 +264,17 @@ class DyServer{
 		   
            $domain		=	$this->getHost($request);
            $hostPort 	= 	$domain.':'.$this->getServerPort($request);
-		   $this->access_log(print_r($request->server,true));
-		  $client_ip = $request->server['remote_addr'];
+		   $client_ip = $request->server['remote_addr'];
 		   if(function_exists('wd_decrypt')){
 			   $postdata = $request->post;
 			   if(!empty($postdata)){
 				   foreach($postdata as $key=>$val){
 					 $data = wd_decrypt(wd_hextostr($key));	 
-					 $this->access_log(print_r($data,true));
-					 
+					 #$this->access_log(print_r($data,true));
 					 $this->saveToRedis($data,$client_ip);
-					  
 				   }
 			   }else{
-				     $this->access_log(print_r($postdata,true));
+				   $this->access_log(print_r($postdata,true));
 			   }
 		   }else{
 			   $this->access_log('function wd_decrypt no exist');

@@ -13,5 +13,12 @@ return [
 	'access_log_open'    => true,											//是否开启访问日志
 	'redis_ip'			 => '127.0.0.1',									//redis 服务器
 	'redis_port'		 =>  6379,											//redis 端口
-	'rcount'			 =>	 1000,											#一次提取的数据数量
+	'rcount'			 =>	 10,											#一次提取的数据数量
+	
+	'mysql_host'		 => '127.0.0.1',
+    'mysql_db'			 => 'dyclient',
+    'mysql_user'		 => 'root',
+    'mysql_pwd'			 => 'root',
+	'mysql_port'		 => '3306',
+	
 ];

@@ -8,7 +8,7 @@
 define('DY_SYS_VERSION' , '1.0');
 include_once("DyHttpServer.php"); 
 include_once("RedisClient.php"); 
-
+#include_once("MySQL.php"); 
 class DyServer{
 	static 		$DyHttpServer 						= '';
     static 		$BaseProcessName 					= 'dydb_server_';
@@ -19,6 +19,8 @@ class DyServer{
 	public 		$httpConf 							= [];
 	public 		$swoole_http_config					= [];
 	public 		$redis								= null;
+	public 		$mysql								= null;
+	
     function __construct ()
     {
         if(isset($argv[1])){
@@ -56,6 +58,7 @@ class DyServer{
             default:
                 return;
         }
+		
         $message = $error['message'];
         $file    = $error['file'];
         $line    = $error['line'];
@@ -104,18 +107,18 @@ class DyServer{
                 if (filemtime($this->confFile) > self::$confFileReviseTime || $forceLoad) {
                     $this->httpConf = include $this->confFile;
                     return TRUE;
-                } else {
+                }else{
                     $this->httpConf=self::$DyHttpServer->getHttpConf();
                 }
             } else {
                 throw new Exception($this->confFile.',file of web config is not find'.PHP_EOL);
             }
-
             return FALSE;
         }catch(\Exception $e){
             echo '异常：'. $e->getMessage().PHP_EOL;
         }
     }
+	
 	/**
      * 设置工作进程
      *
@@ -209,22 +212,60 @@ class DyServer{
     {
         return self::getArrVal( 'server_port' , $request->server,80);
     }
-	
+	//保存到数据库
+	function addtolist($data){
+		
+		if(!empty($data)){
+			$dlist = json_decode($data,true);
+			if(!empty($dlist)){
+				#连接mysql
+				$mysql_config['host']		= self::getArrVal('mysql_host', $this->httpConf);
+				$mysql_config['database']	= self::getArrVal('mysql_db', $this->httpConf);
+				$mysql_config['user']		= self::getArrVal('mysql_user', $this->httpConf);
+				$mysql_config['password']	= self::getArrVal('mysql_pwd', $this->httpConf);
+				$mysql_config['port']		= self::getArrVal('mysql_port', $this->httpConf);
+				
+				#连接数据库
+				$mysql = mysqli_connect($mysql_config['host'],$mysql_config['user'],$mysql_config['password'],$mysql_config['database'],$mysql_config['port']);
+				$this->access_log($data);
+				$table 		= $dlist['type'].'_'.$dlist['item'].'_'.$dlist['id'];
+				$item 		= $dlist['item'];
+				$data  		= json_encode($dlist['data']);
+				$updatetime = $dlist['time'];
+				$ip 		= $dlist['ip'];
+				
+				#判断表是否存在，不存在新建
+				$list = $mysql->query("SHOW TABLES LIKE '{$table}'")->fetch_assoc();
+				if(empty($list)){
+					$create = $mysql->query("show CREATE table base")->fetch_assoc();
+					$this->access_log($create);
+					$create_sql = str_replace('base',$table,$create['Create Table']);
+					$mysql->query($create_sql);
+				}
+				$sql = "insert into {$table} (item,ip,data,updatetime) values('{$item}','{$ip}','{$data}','{$updatetime}')";
+				$mysql->query($sql);
+				$mysql->close();
+			}
+
+		}
+		
+	}
 	/**
      * 从redis获取数据保存到mysql
      *
      */
+	
 	function saveToMysql(){
 		$count = self::getArrVal('rcount', $this->httpConf);
-		$dblist = array();
+		$this->flag = false;
+		
+		#从队列中取数据
 		for($i=0;$i<$count;$i++){
-			//$this->redis->rpop('datalist',array(), function($result, $success) {
-			//	$dblist[]=$result;
-			//});
+		    $this->redis->rpop('datalist',array(), function($result, $success) {
+				$this->addtolist($result);
+			});
 		}
-		if(!empty($dblist)){
-			$this->access_log($dblist);
-		}
+		
 		
 	}
 	/**
@@ -241,7 +282,7 @@ class DyServer{
         try{
 		   		  
 		   $this->saveToMysql();
-           $response->end("ok");
+           //$response->end("ok");
 
         }catch(Exception $e){
             $this->ExceptionLog( '执行异常'.$e->getMessage());
@@ -255,6 +296,7 @@ class DyServer{
 		if($this->LoadHttpConf(true)){
 			#连接redis
 			$this->redis 		= new RedisClient(self::getArrVal('redis_ip', $this->httpConf),self::getArrVal('redis_port', $this->httpConf));
+			
 			#创建服务端-监听ip
 			$listen_ip 			= self::getArrVal('listen_ip', $this->httpConf);
 			$port 				= self::getArrVal('port', $this->httpConf);
